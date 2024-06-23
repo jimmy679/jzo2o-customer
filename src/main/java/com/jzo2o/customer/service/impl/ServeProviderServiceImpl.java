@@ -10,6 +10,7 @@ import com.jzo2o.api.customer.dto.request.ServerProviderUpdateStatusReqDTO;
 import com.jzo2o.api.customer.dto.response.ServeProviderResDTO;
 import com.jzo2o.api.customer.dto.response.ServeProviderSimpleResDTO;
 import com.jzo2o.api.publics.SmsCodeApi;
+import com.jzo2o.api.publics.dto.response.BooleanResDTO;
 import com.jzo2o.common.constants.CommonStatusConstants;
 import com.jzo2o.common.constants.UserType;
 import com.jzo2o.common.enums.EnableStatusEnum;
@@ -35,6 +36,7 @@ import com.jzo2o.customer.model.dto.response.ServeProviderListResDTO;
 import com.jzo2o.customer.service.*;
 import com.jzo2o.mvc.utils.UserContext;
 import com.jzo2o.mysql.utils.PageHelperUtils;
+import org.apache.catalina.security.SecurityConfig;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,6 +76,7 @@ public class ServeProviderServiceImpl extends ServiceImpl<ServeProviderMapper, S
     private IServeProviderService owner;
     @Resource
     private SmsCodeApi smsCodeApi;
+
 
     @Override
     public PageResult<ServeProviderListResDTO> pageQueryWorker(ServeProviderPageQueryReqDTO serveProviderPageQueryReqDTO) {
@@ -203,6 +206,66 @@ public class ServeProviderServiceImpl extends ServiceImpl<ServeProviderMapper, S
         } else {
             AgencyCertification agencyCertification = agencyCertificationService.getById(providerId);
             return BeanUtil.toBean(agencyCertification,CertificationStatusDTO.class);
+        }
+    }
+
+    
+    /*/**
+     *@Param 机构注册
+     *@Return 
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void register(InstitutionRegisterReqDTO institutionRegisterReqDTO) {
+        //校验机构手机号是否存在
+        ServeProvider serveProvider = lambdaQuery()
+                .eq(ServeProvider::getPhone, institutionRegisterReqDTO.getPhone())
+                .one();
+        if(serveProvider != null){
+            throw new BadRequestException("该账号已被您机构的人员注册过！");
+        }
+        //获取并比对验证码是否正确
+        BooleanResDTO verify = smsCodeApi.verify(institutionRegisterReqDTO.getPhone(), SmsBussinessTypeEnum.INSTITION_REGISTER, institutionRegisterReqDTO.getVerifyCode());
+        if(!(verify.getIsSuccess())){
+            throw new BadRequestException("验证码错误！");
+        }
+        ServeProvider serveProvider1=new ServeProvider();
+        serveProvider1.setPhone(institutionRegisterReqDTO.getPhone());
+        String password = institutionRegisterReqDTO.getPassword();
+        String encoded = passwordEncoder.encode(password);
+        serveProvider1.setPassword(encoded);
+        serveProvider1.setType(3);
+        serveProvider1.setStatus(CommonStatusConstants.USER_STATUS_NORMAL);
+        serveProvider1.setCode(IdUtils.getSnowflakeNextIdStr());
+        baseMapper.insert(serveProvider1);
+    }
+
+
+    /*/**
+     *@Param 重置密码
+     *@Return
+     */
+    @Override
+    public void resetPassword(InstitutionResetPasswordReqDTO institutionResetPasswordReqDTO) {
+        //校验机构手机号是否存在
+        ServeProvider serveProvider = lambdaQuery()
+                .eq(ServeProvider::getPhone, institutionResetPasswordReqDTO.getPhone())
+                .one();
+        if(serveProvider == null){
+            throw new BadRequestException("该账号不存在！");
+        }
+        //获取并比对验证码是否正确
+        BooleanResDTO verify = smsCodeApi.verify(institutionResetPasswordReqDTO.getPhone(), SmsBussinessTypeEnum.INSTITION_REGISTER, institutionResetPasswordReqDTO.getVerifyCode());
+        if((verify.getIsSuccess())){
+            throw new BadRequestException("验证码错误！");
+        }
+        String encoded = passwordEncoder.encode(institutionResetPasswordReqDTO.getPassword());
+        boolean update = lambdaUpdate()
+                .eq(ServeProvider::getPhone, institutionResetPasswordReqDTO.getPhone())
+                .set(ServeProvider::getPassword, encoded)
+                .update();
+        if (!update){
+            throw new BadRequestException("重置密码失败！");
         }
     }
 

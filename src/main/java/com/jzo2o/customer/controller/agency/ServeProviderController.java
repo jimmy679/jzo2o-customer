@@ -20,7 +20,7 @@ import javax.annotation.Resource;
  */
 @RestController("agencyServeProviderController")
 @RequestMapping("/agency/serve-provider")
-@Api(tags = "机构端 - 服务人员或机构相关接口")
+@Api(tags = "白名单接口 - ")
 public class ServeProviderController {
     @Resource
     private IServeProviderService serveProviderService;
@@ -32,4 +32,12 @@ public class ServeProviderController {
     public ServeProviderInfoResDTO currentUserInfo() {
         return serveProviderService.currentUserInfo();
     }
+
+    @PostMapping("/institution/resetPassword")
+    @ApiOperation("忘记密码恢复接口")
+    public void resetPassword(@RequestBody InstitutionResetPasswordReqDTO institutionResetPasswordReqDTO){
+        serveProviderService.resetPassword(institutionResetPasswordReqDTO);
+    }
+
+
 }
